@@ -23,6 +23,9 @@ def get_claude_desktop_config_path():
     home = Path.home()
     
     if system == "Windows":
+        appdata = os.getenv("APPDATA")
+        if appdata:
+            return Path(appdata) / "Claude" / "claude_desktop_config.json"
         return home / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
     elif system == "Darwin":  # macOS
         return home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
@@ -66,9 +69,12 @@ def configure_antigravity(python_exe, server_script):
     
     # Determine path based on OS
     if sys.platform == "win32":
-        # Windows: %APPDATA%/Google/Antigravity/mcp_config.json (Best guess based on standard patterns)
-        # Or potentially in user profile .gemini
-        config_path = home / "AppData" / "Roaming" / "Google" / "Antigravity" / "mcp_config.json"
+        # Windows: %APPDATA%/Google/Antigravity/mcp_config.json
+        appdata = os.getenv("APPDATA")
+        if appdata:
+             config_path = Path(appdata) / "Google" / "Antigravity" / "mcp_config.json"
+        else:
+             config_path = home / "AppData" / "Roaming" / "Google" / "Antigravity" / "mcp_config.json"
     elif sys.platform == "darwin":
         # macOS: ~/Library/Application Support/Google/Antigravity/mcp_config.json
         config_path = home / "Library" / "Application Support" / "Google" / "Antigravity" / "mcp_config.json"
