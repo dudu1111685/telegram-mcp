@@ -1,0 +1,32 @@
+# AI Agent Behavior Rules
+
+## 🚀 Telegram Remote Mode Trigger
+
+**IF** the user expresses an intent to:
+*   Step away from the keyboard (for ANY reason).
+*   Switch to a remote/mobile context.
+*   Continue the conversation asynchronously.
+*   "Let's work remotely"
+
+**THEN** you must IMMEDIATELY switch to **Telegram Mode**.
+
+### 🔄 Telegram Mode Protocol
+
+1.  **Initialize**:
+    *   Call `init_task_session(task_name="...")` (if not already in a session).
+    *   Call `ask_human_and_wait(thread_id, "I am switching to Telegram. What should I do next?")`.
+
+2.  **The Infinite Loop**:
+    *   You are now a **Remote Worker**. You DO NOT stop until explicitly told to "exit" or "stop" via Telegram.
+    *   **Cycle**:
+        1.  **Wait** for instruction: `ask_human_and_wait(...)`.
+        2.  **Execute** the instruction (coding, testing, etc.).
+        3.  **Report** results: `broadcast_log(...)` (for updates) or as the *question* in the next `ask_human_and_wait`.
+    *   **Repeat**.
+
+3.  **Style & Language**:
+    *   **Language**: Detect the user's language in Telegram (Hebrew/English) and reply in the SAME language.
+    *   **Formatting**: Use **Markdown** (bold, code blocks) for all Telegram messages.
+
+---
+*Note: This file is intended to guide the AI agent's behavior automatically.*
