@@ -33,90 +33,65 @@ def get_claude_desktop_config_path():
         return home / ".config" / "Claude" / "claude_desktop_config.json"
 
 def configure_claude_code(python_exe, server_script):
-    """Configures Claude Code (CLI) globally."""
+    """Configures Claude Code (CLI) by writing to managed-mcp.json."""
     print("\n🤖 Configuring Claude Code (CLI)...")
-    
-    # 1. Try to remove existing server first (to allow updates)
-    try:
-        subprocess.run(
-            ["claude", "mcp", "remove", "telegram-agent"],
-            check=False, 
-            stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL
-        )
-    except FileNotFoundError:
-        print("   ⚠️  'claude' command not found. Skipping CLI configuration.")
-        return
-
-    # 2. Add the server
-    cmd = [
-        "claude", "mcp", "add", "telegram-agent",
-        "--scope", "user",
-        "--", python_exe, str(server_script)
-    ]
-    
-    try:
-        subprocess.run(cmd, check=True)
-        print("   ✅ Claude Code configured successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"   ❌ Failed to configure Claude Code: {e}")
-
-def configure_antigravity(python_exe, server_script):
-    """Attempts to configure Antigravity / Gemini IDE automatically."""
-    print("\n🌌 Configuring Antigravity (Gemini IDE)...")
     
     home = Path.home()
     
     # Determine path based on OS
     if sys.platform == "win32":
-        # Windows: %APPDATA%/Google/Antigravity/mcp_config.json
-        appdata = os.getenv("APPDATA")
-        if appdata:
-             config_path = Path(appdata) / "Google" / "Antigravity" / "mcp_config.json"
-        else:
-             config_path = home / "AppData" / "Roaming" / "Google" / "Antigravity" / "mcp_config.json"
+        # Windows: C:\ProgramData\ClaudeCode\managed-mcp.json
+        config_path = Path("C:/ProgramData/ClaudeCode/managed-mcp.json")
     elif sys.platform == "darwin":
-        # macOS: ~/Library/Application Support/Google/Antigravity/mcp_config.json
-        config_path = home / "Library" / "Application Support" / "Google" / "Antigravity" / "mcp_config.json"
+        # macOS: /Library/Application Support/ClaudeCode/managed-mcp.json
+        config_path = Path("/Library/Application Support/ClaudeCode/managed-mcp.json")
     else:
-        # Linux: ~/.gemini/antigravity/mcp_config.json (Confirmed by user)
-        config_path = home / ".gemini" / "antigravity" / "mcp_config.json"
+        # Linux: /etc/claude-code/managed-mcp.json
+        config_path = Path("/etc/claude-code/managed-mcp.json")
     
-    # Fallback/Alternative check for Linux if the above doesn't exist but ~/.gemini/settings.json does
-    if not config_path.parent.exists() and (home / ".gemini" / "settings.json").exists():
-         config_path = home / ".gemini" / "settings.json"
-
     print(f"   Target config path: {config_path}")
-
+    
+    # Create parent directory if it doesn't exist
     if not config_path.parent.exists():
         try:
             config_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-
+        except PermissionError:
+            print(f"   ⚠️  No permission to create {config_path.parent}. Skipping Claude Code configuration.")
+            return
+        except Exception as e:
+            print(f"   ⚠️  Could not create directory: {e}. Skipping Claude Code configuration.")
+            return
+    
+    # Read existing config or start fresh
     config_data = {}
     if config_path.exists():
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-        except:
+        except Exception:
             pass
-
+    
+    # Ensure mcpServers section exists
     if "mcpServers" not in config_data:
         config_data["mcpServers"] = {}
-
-    # Antigravity config usually follows the same structure
+    
+    # Add our server configuration
     config_data["mcpServers"]["telegram-agent"] = {
-        "command": python_exe,
-        "args": [str(server_script)]
+        "command": str(Path(python_exe).as_posix()),
+        "args": [str(server_script.as_posix())]
     }
-
+    
+    # Write the config
     try:
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config_data, f, indent=2)
-        print(f"   ✅ Antigravity configuration updated at {config_path}")
+        print(f"   ✅ Claude Code configuration updated at {config_path}")
+    except PermissionError:
+        print(f"   ⚠️  No permission to write to {config_path}. You may need to run as administrator.")
     except Exception as e:
-        print(f"   ❌ Failed to update Antigravity config: {e}")
+        print(f"   ❌ Failed to update Claude Code config: {e}")
+
+
 
 def main():
     print("🚀 Starting Telegram MCP Server Setup (Universal)")
@@ -157,12 +132,13 @@ def main():
         print(f"   ❌ Failed to write .env file: {e}")
         sys.exit(1)
 
-    python_exe = sys.executable
+    # Convert python executable path to POSIX style for cross-platform JSON compatibility
+    python_exe = Path(sys.executable).as_posix()
 
     # 5. Prepare Config Data (for Desktop & Manual)
     server_config = {
         "command": python_exe,
-        "args": [str(server_script)]
+        "args": [str(server_script.as_posix())]
     }
 
     # 6. Configure Claude Desktop
@@ -198,12 +174,11 @@ def main():
     # 7. Configure Claude Code (CLI)
     configure_claude_code(python_exe, server_script)
 
-    # 8. Configure Antigravity
-    configure_antigravity(python_exe, server_script)
+
 
     # 9. Universal Output
-    print("\n🌐 Universal Configuration (Other Tools)")
-    print("For any other tool, use this MCP configuration:")
+    print("\n🖱️  Cursor / Other Tools Configuration")
+    print("For Cursor, go to 'Features > MCP' and add this manually:")
     print("-" * 60)
     
     universal_json = {

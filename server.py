@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import asyncio
 import httpx
@@ -31,10 +32,10 @@ class TelegramHandler:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            print(f"Error calling Telegram API: {e.response.text}")
+            print(f"Error calling Telegram API: {e.response.text}", file=sys.stderr)
             raise
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"Unexpected error: {e}", file=sys.stderr)
             raise
 
     def create_forum_topic(self, name: str) -> int:
@@ -124,12 +125,12 @@ class TelegramHandler:
             if result.get("ok"):
                 return result["result"]
             else:
-                print(f"Telegram API Error: {result}")
+                print(f"Telegram API Error: {result}", file=sys.stderr)
         except Exception as e:
-            print(f"Failed to send with {parse_mode}: {e}")
+            print(f"Failed to send with {parse_mode}: {e}", file=sys.stderr)
 
         # Fallback: Try plain text if HTML failed
-        print("Retrying as plain text...")
+        print("Retrying as plain text...", file=sys.stderr)
         del data["parse_mode"]
         data["text"] = text # Restore original text
         result = self._make_request("POST", "sendMessage", data)
@@ -155,12 +156,12 @@ class TelegramHandler:
                 return result["result"]
             return []
         except Exception as e:
-            print(f"Error getting updates: {e}")
+            print(f"Error getting updates: {e}", file=sys.stderr)
             return []
 
     def wait_for_reply(self, thread_id: int) -> str:
         """Blocks until a user replies in the specified thread (text or button click)."""
-        print(f"Waiting for reply in thread {thread_id}...")
+        print(f"Waiting for reply in thread {thread_id}...", file=sys.stderr)
         
         updates = self.get_updates()
         last_update_id = 0
