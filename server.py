@@ -97,9 +97,9 @@ class TelegramHandler:
         
         return "".join(html_parts)
 
-    def send_message(self, thread_id: int, text: str, parse_mode: str = "HTML", buttons: list[str] = None) -> dict:
+    def send_message(self, thread_id: int, text: str, parse_mode: str = "HTML", buttons: list[str] = None, silent_mode: bool = False) -> dict:
         """
-        Sends a message to a specific topic. 
+        Sends a message to a specific topic.
         Converts Markdown to HTML by default.
         """
         # Convert text if using HTML and it looks like Markdown
@@ -118,28 +118,31 @@ class TelegramHandler:
             # Create inline keyboard (1 column layout for simplicity and long text support)
             keyboard = [[{"text": btn, "callback_data": btn[:64]}] for btn in buttons]
             data["reply_markup"] = {"inline_keyboard": keyboard}
-        
+
         try:
             # Try sending with formatting
             result = self._make_request("POST", "sendMessage", data)
             if result.get("ok"):
                 return result["result"]
             else:
-                print(f"Telegram API Error: {result}", file=sys.stderr)
+                if not silent_mode:
+                    print(f"Telegram API Error: {result}", file=sys.stderr)
         except Exception as e:
-            print(f"Failed to send with {parse_mode}: {e}", file=sys.stderr)
+            if not silent_mode:
+                print(f"Failed to send with {parse_mode}: {e}", file=sys.stderr)
 
         # Fallback: Try plain text if HTML failed
-        print("Retrying as plain text...", file=sys.stderr)
+        if not silent_mode:
+            print("Retrying as plain text...", file=sys.stderr)
         del data["parse_mode"]
         data["text"] = text # Restore original text
         result = self._make_request("POST", "sendMessage", data)
         if result.get("ok"):
             return result["result"]
-                
+
         raise Exception(f"Failed to send message: {result}")
 
-    def get_updates(self, offset: int = None) -> list:
+    def get_updates(self, offset: int = None, silent_mode: bool = False) -> list:
         """Fetches updates from Telegram."""
         data = {
             "timeout": 10,  # Long polling timeout
@@ -147,7 +150,7 @@ class TelegramHandler:
         }
         if offset:
             data["offset"] = offset
-        
+
         try:
             response = self.client.post(f"{API_BASE_URL}/getUpdates", json=data, timeout=15.0)
             response.raise_for_status()
@@ -156,20 +159,22 @@ class TelegramHandler:
                 return result["result"]
             return []
         except Exception as e:
-            print(f"Error getting updates: {e}", file=sys.stderr)
+            if not silent_mode:
+                print(f"Error getting updates: {e}", file=sys.stderr)
             return []
 
-    def wait_for_reply(self, thread_id: int) -> str:
+    def wait_for_reply(self, thread_id: int, silent_mode: bool = False) -> str:
         """Blocks until a user replies in the specified thread (text or button click)."""
-        print(f"Waiting for reply in thread {thread_id}...", file=sys.stderr)
+        if not silent_mode:
+            print(f"Waiting for reply in thread {thread_id}...", file=sys.stderr)
         
-        updates = self.get_updates()
+        updates = self.get_updates(silent_mode=silent_mode)
         last_update_id = 0
         if updates:
             last_update_id = updates[-1]["update_id"]
 
         while True:
-            updates = self.get_updates(offset=last_update_id + 1)
+            updates = self.get_updates(offset=last_update_id + 1, silent_mode=silent_mode)
             
             for update in updates:
                 last_update_id = update["update_id"]
@@ -201,7 +206,7 @@ class TelegramHandler:
                         
                         selection = callback["data"]
                         # Send a confirmation message so it appears in chat history
-                        self.send_message(thread_id, f"🔘 **Selected:** {selection}")
+                        self.send_message(thread_id, f"🔘 **Selected:** {selection}", silent_mode=silent_mode)
                         
                         return selection
             
@@ -224,43 +229,53 @@ def init_task_session(task_name: str) -> str:
         return f"Error creating task session: {str(e)}"
 
 @mcp.tool()
-def broadcast_log(thread_id: str, message: str) -> str:
+def broadcast_log(thread_id: str, message: str, silent_mode: bool = False) -> str:
     """
     Sends a log message to the Telegram topic.
     Returns a confirmation string.
+
+    Args:
+        thread_id: The Telegram topic ID.
+        message: The message to send.
+        silent_mode: If True, suppress terminal output (for Telegram mode)
     """
     try:
-        telegram.send_message(int(thread_id), message)
+        telegram.send_message(int(thread_id), message, silent_mode=silent_mode)
         return "Log sent successfully"
     except Exception as e:
+        if not silent_mode:
+            print(f"Error broadcasting log: {str(e)}", file=sys.stderr)
         return f"Error broadcasting log: {str(e)}"
 
 @mcp.tool()
-def ask_human_and_wait(thread_id: str, question: str, options: list[str] = None) -> str:
+def ask_human_and_wait(thread_id: str, question: str, options: list[str] = None, silent_mode: bool = False) -> str:
     """
     Sends a message to the Telegram topic and WAITS for a user reply.
     Use this to ask for the next instruction or clarification.
-    
+
     Args:
         thread_id: The Telegram topic ID.
         question: The text to send.
         options: Optional list of short strings (max 3-4) to present as buttons.
                  Example: ["Run Tests", "Deploy", "Explain Code"]
-    
+        silent_mode: If True, suppress terminal output (for Telegram mode)
+
     Returns the user's reply text (or the button label selected).
     """
     try:
         # 1. Send the question/message with buttons
         telegram.send_message(int(thread_id), question, buttons=options)
-        
-        # 2. Wait for reply
-        answer = telegram.wait_for_reply(int(thread_id))
-        
+
+        # 2. Wait for reply (with silent mode option)
+        answer = telegram.wait_for_reply(int(thread_id), silent_mode=silent_mode)
+
         # 3. No auto-acknowledgement needed for natural chat flow
         # The Agent will reply naturally in the next turn.
-        
+
         return answer
     except Exception as e:
+        if not silent_mode:
+            print(f"Error asking human: {str(e)}", file=sys.stderr)
         return f"Error asking human: {str(e)}"
 
 if __name__ == "__main__":
